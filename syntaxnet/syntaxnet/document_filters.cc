@@ -66,6 +66,15 @@ void OutputDocuments(OpKernelContext *context,
   utils::STLDeleteElements(document_batch);
 }
 
+void OutputString(OpKernelContext *context,
+                     string s) {
+  const int64 size = 1;
+  Tensor *output;
+  OP_REQUIRES_OK(context,
+                 context->allocate_output(0, TensorShape({size}), &output));
+  output->vec<string>()(0) = s;
+}
+
 }  // namespace
 
 class DocumentSource : public OpKernel {
@@ -153,6 +162,43 @@ class DocumentSink : public OpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("DocumentSink").Device(DEVICE_CPU),
                         DocumentSink);
+
+class VariableSink : public OpKernel {
+ public:
+  explicit VariableSink(OpKernelConstruction *context) : OpKernel(context) {
+    GetTaskContext(context, &task_context_);
+    string corpus_name;
+    OP_REQUIRES_OK(context, context->GetAttr("corpus_name", &corpus_name));
+    converter_.reset(
+        new SentenceConverter(*task_context_.GetInput(corpus_name), &task_context_));
+  }
+
+  void Compute(OpKernelContext *context) override {
+    mutex_lock lock(mu_);
+    auto documents = context->input(0).vec<string>();
+    for (int i = 0; i < documents.size(); ++i) {
+      Sentence document;
+      OP_REQUIRES(context, document.ParseFromString(documents(i)),
+                  InvalidArgument("failed to parse sentence"));
+      string s;
+      s = converter_->Convert(document);
+      OutputString(context, s);
+    }
+  }
+
+ private:
+  // Task context used to configure this op.
+  TaskContext task_context_;
+
+  // mutex to synchronize access to Compute.
+  mutex mu_;
+
+  string documents_path_;
+  std::unique_ptr<SentenceConverter> converter_;
+};
+
+REGISTER_KERNEL_BUILDER(Name("VariableSink").Device(DEVICE_CPU),
+                        VariableSink);
 
 // Sentence filter for filtering out documents where the parse trees are not
 // well-formed, i.e. they contain cycles.

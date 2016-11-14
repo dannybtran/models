@@ -84,6 +84,7 @@ REGISTER_OP("BeamParseReader")
     .Attr("arg_prefix: string='brain_parser'")
     .Attr("continue_until_all_final: bool=false")
     .Attr("always_start_new_sentences: bool=false")
+    .Attr("value: string")
     .SetIsStateful()
     .Doc(R"doc(
 Reads sentences and creates a beam parser.
@@ -241,6 +242,17 @@ Reads documents from documents_path and outputs them.
 documents: a vector of documents as serialized protos.
 last: whether this is the last batch of documents from this document path.
 batch_size: how many documents to read at once.
+)doc");
+
+REGISTER_OP("VariableSink")
+    .Input("documents: string")
+    .Output("results: string")
+    .Attr("task_context: string")
+    .Attr("corpus_name: string='documents'")
+    .Doc(R"doc(
+Return documents as a variable string.
+
+documents: documents to write.
 )doc");
 
 REGISTER_OP("DocumentSink")

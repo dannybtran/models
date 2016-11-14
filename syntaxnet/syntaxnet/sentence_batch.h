@@ -43,7 +43,7 @@ class SentenceBatch {
         sentences_(batch_size) {}
 
   // Initializes all resources and opens the corpus file.
-  void Init(TaskContext *context);
+  void Init(TaskContext *context, string value = "");
 
   // Advances the index'th sentence in the batch to the next sentence. This will
   // create and preprocess a new ParserState for that element. Returns false if
@@ -72,6 +72,9 @@ class SentenceBatch {
 
   // Batch: Sentence objects.
   std::vector<std::unique_ptr<Sentence>> sentences_;
+
+  // String value
+  string value_;
 };
 
 }  // namespace syntaxnet

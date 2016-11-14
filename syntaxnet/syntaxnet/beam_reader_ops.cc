@@ -109,6 +109,9 @@ struct BatchStateOptions {
   // Whether to skip to a new sentence after each training step.
   bool always_start_new_sentences;
 
+  // take a variable to pass directly to sentence batch
+  string value;
+
   // Parameter for deciding which tokens to score.
   string scoring_type;
 };
@@ -374,7 +377,7 @@ class BatchState {
     // Create sentence batch.
     sentence_batch_.reset(
         new SentenceBatch(BatchSize(), options_.corpus_name));
-    sentence_batch_->Init(task_context);
+    sentence_batch_->Init(task_context, options_.value);
 
     // Create transition system.
     transition_system_.reset(ParserTransitionSystem::Create(task_context->Get(
@@ -572,6 +575,8 @@ class BeamParseReader : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->GetAttr("always_start_new_sentences",
                                     &options.always_start_new_sentences));
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("value", &options.value));
 
     // Reads task context from file.
     string data;
