@@ -23,8 +23,8 @@ limitations under the License.
 
 namespace syntaxnet {
 
-void SentenceBatch::Init(TaskContext *context) {
-  reader_.reset(new TextReader(*context->GetInput(input_name_), context));
+void SentenceBatch::Init(TaskContext *context, string value) {
+  reader_.reset(new TextReader(*context->GetInput(input_name_), context, value));
   size_ = 0;
 }
 

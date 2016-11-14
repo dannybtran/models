@@ -78,7 +78,8 @@ class StructuredGraphBuilder(graph_builder.GreedyParser):
                      batch_size,
                      corpus_name,
                      until_all_final=False,
-                     always_start_new_sentences=False):
+                     always_start_new_sentences=False,
+                     value="none"):
     """Adds an op capable of reading sentences and parsing them with a beam."""
     features, state, epochs = gen_parser_ops.beam_parse_reader(
         task_context=task_context,
@@ -89,7 +90,8 @@ class StructuredGraphBuilder(graph_builder.GreedyParser):
         allow_feature_weights=self._allow_feature_weights,
         arg_prefix=self._arg_prefix,
         continue_until_all_final=until_all_final,
-        always_start_new_sentences=always_start_new_sentences)
+        always_start_new_sentences=always_start_new_sentences,
+        value=value)
     return {'state': state, 'features': features, 'epochs': epochs}
 
   def _BuildSequence(self,
@@ -223,14 +225,16 @@ class StructuredGraphBuilder(graph_builder.GreedyParser):
                     task_context,
                     batch_size,
                     evaluation_max_steps=300,
-                    corpus_name=None):
+                    corpus_name=None,
+                    value=""):
     with tf.name_scope('evaluation'):
       n = self.evaluation
       n.update(self._AddBeamReader(task_context,
                                    batch_size,
                                    corpus_name,
                                    until_all_final=True,
-                                   always_start_new_sentences=True))
+                                   always_start_new_sentences=True,
+                                   value=value))
       self._BuildNetwork(
           list(n['features']),
           return_average=self._use_averaging)

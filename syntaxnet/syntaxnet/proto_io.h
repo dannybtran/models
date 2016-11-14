@@ -38,6 +38,7 @@ limitations under the License.
 #include "tensorflow/core/lib/io/record_writer.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/platform/logging.h"
 
 namespace syntaxnet {
 
@@ -142,10 +143,47 @@ class StdIn : public tensorflow::RandomAccessFile {
   TF_DISALLOW_COPY_AND_ASSIGN(StdIn);
 };
 
+// A file implementation to read from a string.
+class StringIn : public tensorflow::RandomAccessFile {
+ public:
+  StringIn(string value) {
+    value_ = value;
+  }
+  ~StringIn() override {}
+
+  // Reads up to n bytes from a string.  Returns `OUT_OF_RANGE` if fewer
+  // than n bytes were stored in `*result` because of EOF.
+  tensorflow::Status Read(uint64 offset, size_t n,
+                          tensorflow::StringPiece *result,
+                          char *scratch) const override {
+    if (value_ == "") {
+      return tensorflow::errors::OutOfRange("End of file reached");
+    }
+    buffer_.append(value_);
+    buffer_.append("\n");
+    CopyFromBuffer(std::min(buffer_.size(), n), result, scratch);
+    value_ = "";
+    return tensorflow::errors::OutOfRange("End of file reached");
+  }
+
+ private:
+  void CopyFromBuffer(size_t n, tensorflow::StringPiece *result,
+                     char *scratch) const {
+   memcpy(scratch, buffer_.data(), buffer_.size());
+   buffer_ = buffer_.substr(n);
+   result->set(scratch, n);
+  }
+
+  mutable string buffer_;
+  mutable string value_;
+
+  TF_DISALLOW_COPY_AND_ASSIGN(StringIn);
+};
+
 // Reads sentence protos from a text file.
 class TextReader {
  public:
-  explicit TextReader(const TaskInput &input, TaskContext *context) {
+  explicit TextReader(const TaskInput &input, TaskContext *context, string value = "") {
     CHECK_EQ(input.record_format_size(), 1)
         << "TextReader only supports inputs with one record format: "
         << input.DebugString();
@@ -155,6 +193,7 @@ class TextReader {
     filename_ = TaskContext::InputFile(input);
     format_.reset(DocumentFormat::Create(input.record_format(0)));
     format_->Setup(context);
+    value_ = value;
     Reset();
   }
 
@@ -185,6 +224,12 @@ class TextReader {
       stream_.reset(new tensorflow::io::RandomAccessInputStream(file_.get()));
       buffer_.reset(new tensorflow::io::BufferedInputStream(file_.get(),
                                                             kInputBufferSize));
+    } else if (filename_ == "--") {
+      static const int kInputBufferSize = 8 * 1024; /* bytes */
+      file_.reset(new StringIn(value_));
+      stream_.reset(new tensorflow::io::RandomAccessInputStream(file_.get()));
+      buffer_.reset(new tensorflow::io::BufferedInputStream(file_.get(),
+                                                            kInputBufferSize));
     } else {
       static const int kInputBufferSize = 1 * 1024 * 1024; /* bytes */
       TF_CHECK_OK(
@@ -197,6 +242,7 @@ class TextReader {
 
  private:
   string filename_;
+  string value_;
   int sentence_count_ = 0;
   std::unique_ptr<tensorflow::RandomAccessFile>
       file_;  // must outlive buffer_, stream_
@@ -245,6 +291,29 @@ class TextWriter {
   string filename_;
   std::unique_ptr<DocumentFormat> format_;
   std::unique_ptr<tensorflow::WritableFile> file_;
+};
+
+class SentenceConverter {
+  public:
+    explicit SentenceConverter(const TaskInput &input, TaskContext *context) {
+      CHECK_EQ(input.record_format_size(), 1)
+          << "TextWriter only supports files with one record format: "
+          << input.DebugString();
+      CHECK_EQ(input.part_size(), 1)
+          << "TextWriter only supports files with one part: "
+          << input.DebugString();
+      format_.reset(DocumentFormat::Create(input.record_format(0)));
+      format_->Setup(context);
+    }
+
+    string Convert(const Sentence &sentence) {
+      string key, value;
+      format_->ConvertToString(sentence, &key, &value);
+      return value;
+    }
+
+ private:
+  std::unique_ptr<DocumentFormat> format_;
 };
 
 }  // namespace syntaxnet
